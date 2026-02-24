@@ -201,7 +201,7 @@ export default function InventoryPage() {
           </div>
 
           {/* Summary Cards */}
-          <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-2 gap-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:shadow-xs lg:grid-cols-4">
+          <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-2 gap-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:shadow-xs lg:grid-cols-3">
             <Card>
               <CardHeader>
                 <CardDescription>Total Cards</CardDescription>
@@ -237,21 +237,7 @@ export default function InventoryPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground text-sm">
-                  {transactions.filter((t) => t.type === "spend").length} spend transactions
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardDescription>Donated Out</CardDescription>
-                <CardTitle className="text-3xl font-semibold tabular-nums">
-                  ${totalDonatedOut.toFixed(2)}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground text-sm">
-                  {transactions.filter((t) => t.type === "donation").length} donation transactions
+                  Total value spent or donated out from all cards
                 </p>
               </CardContent>
             </Card>
