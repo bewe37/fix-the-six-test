@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import { AppSidebar } from "@/components/app-sidebar"
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { Separator } from "@/components/ui/separator"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
@@ -15,22 +16,9 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import { DownloadIcon } from "@hugeicons/core-free-icons"
 import donationsData from "./data.json"
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-const TIME_PERIODS = ["Last 3 months", "Last 30 days", "Last 7 days"]
-
-function getPeriodCutoff(period: string): Date | null {
-  const now = new Date()
-  if (period === "Last 7 days")    return new Date(now.setDate(now.getDate() - 7))
-  if (period === "Last 30 days")   return new Date(now.setDate(now.getDate() - 30))
-  if (period === "Last 3 months")  return new Date(now.setMonth(now.getMonth() - 3))
-  return null
-}
-
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DonationsPage() {
-  const [timePeriod, setTimePeriod] = React.useState("Last 3 months")
   const [filters, setFilters] = React.useState({
     startDate: "", endDate: "", store: "", recipient: "",
   })
@@ -39,14 +27,12 @@ export default function DonationsPage() {
 
   const filteredData = React.useMemo(() => {
     let data = [...donationsData]
-    const cutoff = getPeriodCutoff(timePeriod)
-    if (cutoff) data = data.filter(d => new Date(d.date) >= cutoff)
     if (filters.startDate) data = data.filter(d => new Date(d.date) >= new Date(filters.startDate))
     if (filters.endDate)   data = data.filter(d => new Date(d.date) <= new Date(filters.endDate))
     if (filters.store)     data = data.filter(d => d.store === filters.store)
     if (filters.recipient) data = data.filter(d => d.recipient.toLowerCase().includes(filters.recipient.toLowerCase()))
     return data
-  }, [timePeriod, filters])
+  }, [filters])
 
   const totalCount = filteredData.length
   const totalValue = filteredData.reduce((sum, d) => sum + d.amount, 0)
@@ -67,25 +53,17 @@ export default function DonationsPage() {
       <AppSidebar variant="inset" />
       <SidebarInset>
 
+        {/* ── Header ── */}
+        <div className="border-b h-12 flex items-center shrink-0">
+          <div className="flex items-center gap-4 pl-5">
+            <SidebarTrigger className="bg-white border border-[#e2e8f0] rounded-[6px] p-2 size-8 flex items-center justify-center" />
+            <Separator orientation="vertical" className="h-4 bg-[#e5e5e5]" />
+            <span className="font-medium text-[16px] text-[#0a0a0a]">Donations Given</span>
+          </div>
+        </div>
+
         <div className="flex flex-1 flex-col overflow-auto">
           <div className="flex flex-col gap-6 p-6">
-
-            {/* ── Time period tabs ── */}
-            <div className="border border-[#cbd5e1] rounded-[6px] inline-flex w-fit bg-white px-[5px] py-1">
-              {TIME_PERIODS.map(period => (
-                <button
-                  key={period}
-                  onClick={() => setTimePeriod(period)}
-                  className={`px-3 py-1.5 text-sm rounded-[4px] font-medium transition-colors ${
-                    timePeriod === period
-                      ? "bg-[#f1f5f9] text-[#0a0a0a]"
-                      : "text-[#a3a3a3] hover:text-[#0a0a0a]"
-                  }`}
-                >
-                  {period}
-                </button>
-              ))}
-            </div>
 
             {/* ── Stats row ── */}
             <div className="grid grid-cols-2 gap-4">

@@ -115,7 +115,7 @@ export default function HomePage() {
   return (
     <SidebarProvider>
       <AppSidebar variant="inset" />
-      <SidebarInset>
+      <SidebarInset className="min-w-0 overflow-x-hidden">
 
         {/* ── Header ── */}
         <div className="border-b h-12 flex items-center shrink-0 px-0">
