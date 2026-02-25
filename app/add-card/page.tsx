@@ -134,8 +134,6 @@ function StoreCombobox({ value, onChange, error }: { value: string; onChange: (v
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function AddCardPage() {
-  const [tab, setTab] = useState<"single" | "multiple">("single")
-
   // Single entry state
   const [form, setFormState] = useState<FormData>(EMPTY_FORM)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
@@ -237,49 +235,26 @@ export default function AddCardPage() {
 
         <div className="flex flex-1 flex-col overflow-hidden">
 
-          {/* ── Tab bar + action buttons ── */}
-          <div className="flex items-center gap-2 px-6 pt-6 pb-0 shrink-0">
-            <div className="flex-1">
-              <div className="border border-[#cbd5e1] rounded-[6px] inline-flex bg-white px-[5px] py-1">
-                <button
-                  onClick={() => setTab("single")}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-[4px] transition-colors ${
-                    tab === "single" ? "bg-[#f1f5f9] text-black" : "text-[#a3a3a3]"
-                  }`}
-                >
-                  Single Card
-                </button>
-                <button
-                  onClick={() => setTab("multiple")}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-[4px] transition-colors ${
-                    tab === "multiple" ? "bg-[#f1f5f9] text-black" : "text-[#a3a3a3]"
-                  }`}
-                >
-                  Multiple Cards
-                </button>
-              </div>
+          {/* ── Action buttons ── */}
+          {pageState === "form" && (
+            <div className="flex items-center justify-end gap-2 px-6 pt-6 pb-0 shrink-0">
+              <button
+                type="button"
+                onClick={() => { setFormState(EMPTY_FORM); setFieldErrors({}) }}
+                className="text-sm font-medium text-[#0a0a0a] px-3 h-8 rounded-[26px] hover:bg-[#f5f5f5] transition-colors"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                className="bg-[#0f172a] text-white text-sm font-medium px-4 py-2 rounded-[6px] flex items-center gap-2 hover:bg-[#1e293b] transition-colors"
+              >
+                <HugeiconsIcon icon={CreditCardIcon} strokeWidth={2} className="size-4" />
+                Add Gift Card
+              </button>
             </div>
-
-            {pageState === "form" && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => { setFormState(EMPTY_FORM); setFieldErrors({}) }}
-                  className="text-sm font-medium text-[#0a0a0a] px-3 h-8 rounded-[26px] hover:bg-[#f5f5f5] transition-colors"
-                >
-                  Clear
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  className="bg-[#0f172a] text-white text-sm font-medium px-4 py-2 rounded-[6px] flex items-center gap-2 hover:bg-[#1e293b] transition-colors"
-                >
-                  <HugeiconsIcon icon={CreditCardIcon} strokeWidth={2} className="size-4" />
-                  Add Gift Card
-                </button>
-              </>
-            )}
-          </div>
+          )}
 
           {/* ── Two-column content area ── */}
           <div className="flex flex-1 overflow-hidden border border-[#e2e8f0] mx-6 mt-6 mb-4 rounded-[12px]">

@@ -1,436 +1,378 @@
 "use client"
 
+import { useState, useMemo } from "react"
 import Link from "next/link"
-import { useMemo } from "react"
 import { Treemap, ResponsiveContainer, Tooltip } from "recharts"
 import { AppSidebar } from "@/components/app-sidebar"
-import { SiteHeader } from "@/components/site-header"
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
-import { STORE_CATEGORIES, CATEGORY_RAW, TreemapCell } from "@/lib/treemap"
-import {
-  Card, CardContent, CardDescription, CardHeader, CardTitle,
-} from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table"
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
-  Add01Icon, Archive01Icon, ShoppingBasket01Icon, GiveBloodIcon,
-  CreditCardIcon, AlertCircleIcon, ArrowRight01Icon, UserGroupIcon,
-  DollarCircleIcon, ChartHistogramIcon,
+  Add01Icon, ShoppingBasket01Icon, GiveBloodIcon, Archive01Icon,
+  Search01Icon,
 } from "@hugeicons/core-free-icons"
-import cardData from "./redemption/data.json"
-import donationsData from "./donations/data.json"
+import { STORE_CATEGORIES, CATEGORY_RAW, TreemapCell } from "@/lib/treemap"
+import redemptionData from "./redemption/data.json"
 
-export default function DashboardPage() {
-  const cards = cardData.cards
-  const transactions = cardData.transactions
-  const donations = donationsData
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-  // KPI computations
-  const activeCards = useMemo(() => cards.filter(c => c.status === "Active"), [cards])
-  const totalRemaining = useMemo(() => cards.reduce((s, c) => s + c.remainingBalance, 0), [cards])
-  const totalDonatedOut = useMemo(() => donations.reduce((s, d) => s + d.amount, 0), [donations])
-  const uniqueRecipients = useMemo(() => new Set(donations.map(d => d.recipient)).size, [donations])
+const CATEGORIES = ["All", "Grocery", "Fast Food", "Clothing", "Other"]
+const ROWS_PER_PAGE_OPTIONS = [10, 20, 50]
 
-  // Treemap data — all stores with remaining balance
-  const treemapData = useMemo(() =>
-    Array.from(
-      cards.reduce((map, c) => {
-        const cat = STORE_CATEGORIES[c.store] ?? "Other"
-        const e = map.get(c.store) ?? { name: c.store, size: 0, remaining: 0, redeemed: 0, category: cat }
-        e.size      += c.remainingBalance
-        e.remaining += c.remainingBalance
-        e.redeemed  += c.initialBalance - c.remainingBalance
-        map.set(c.store, e)
-        return map
-      }, new Map<string, { name: string; size: number; remaining: number; redeemed: number; category: string }>())
-      .values()
-    ).filter(s => s.remaining > 0),
-  [cards])
+// ── Pagination button ──────────────────────────────────────────────────────────
 
-  // Low balance alert (active cards with < $20 remaining)
-  const lowBalanceCards = useMemo(
-    () => activeCards.filter(c => c.remainingBalance > 0 && c.remainingBalance < 20),
-    [activeCards]
+function PagBtn({ onClick, disabled, children }: { onClick: () => void; disabled: boolean; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="w-8 h-8 flex items-center justify-center rounded border border-[#e2e8f0] text-sm text-[#525252] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#f1f5f9] transition-colors"
+    >
+      {children}
+    </button>
   )
+}
 
-  // Recent activity
-  const recentTransactions = useMemo(
-    () => [...transactions]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 5),
-    [transactions]
-  )
+// ── Page ──────────────────────────────────────────────────────────────────────
 
-  const recentDonations = useMemo(
-    () => [...donations]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 5),
-    [donations]
-  )
+export default function HomePage() {
+  const [activeCategory, setActiveCategory] = useState("All")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [page, setPage] = useState(1)
+  const [rowsPerPage, setRowsPerPage] = useState(10)
+
+  const cards = redemptionData.cards
+  const transactions = redemptionData.transactions
+
+  // Summary stats
+  const totalCards = cards.length
+  const totalRemaining = cards.reduce((s, c) => s + c.remainingBalance, 0)
+  const totalRedeemed = cards.reduce((s, c) => s + (c.initialBalance - c.remainingBalance), 0)
+  const activeCount = cards.filter(c => c.status === "Active").length
+
+  // Per-store breakdown
+  const storeBreakdown = useMemo(() => {
+    const map = new Map<string, {
+      store: string; category: string; count: number; remaining: number; redeemed: number
+    }>()
+    for (const c of cards) {
+      const cat = STORE_CATEGORIES[c.store] ?? "Other"
+      if (!map.has(c.store)) {
+        map.set(c.store, { store: c.store, category: cat, count: 0, remaining: 0, redeemed: 0 })
+      }
+      const e = map.get(c.store)!
+      e.count += 1
+      e.remaining += c.remainingBalance
+      e.redeemed += c.initialBalance - c.remainingBalance
+    }
+    return Array.from(map.values()).sort((a, b) => b.remaining - a.remaining)
+  }, [cards, transactions])
+
+  // Category filter
+  const filteredByCategory = activeCategory === "All"
+    ? storeBreakdown
+    : storeBreakdown.filter(s => s.category === activeCategory)
+
+  // Search filter
+  const filteredStores = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return filteredByCategory
+    return filteredByCategory.filter(s => s.store.toLowerCase().includes(q))
+  }, [filteredByCategory, searchQuery])
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(filteredStores.length / rowsPerPage))
+  const safePage = Math.min(page, totalPages)
+  const paginatedStores = useMemo(() => {
+    const start = (safePage - 1) * rowsPerPage
+    return filteredStores.slice(start, start + rowsPerPage)
+  }, [filteredStores, safePage, rowsPerPage])
+
+  // Treemap data
+  const treemapData = useMemo(() => {
+    return filteredByCategory
+      .filter(s => s.remaining > 0)
+      .map(s => ({
+        name: s.store,
+        size: parseFloat(s.remaining.toFixed(2)),
+        remaining: parseFloat(s.remaining.toFixed(2)),
+        redeemed: parseFloat(s.redeemed.toFixed(2)),
+        category: s.category,
+      }))
+  }, [filteredByCategory])
+
+  function handleCategoryChange(cat: string) {
+    setActiveCategory(cat)
+    setSearchQuery("")
+    setPage(1)
+  }
 
   return (
-    <SidebarProvider
-      style={{
-        "--sidebar-width": "calc(var(--spacing) * 72)",
-        "--header-height": "calc(var(--spacing) * 12)",
-      } as React.CSSProperties}
-    >
+    <SidebarProvider>
       <AppSidebar variant="inset" />
       <SidebarInset>
-        <SiteHeader />
-        <div className="flex flex-1 flex-col gap-6 p-6">
 
-          {/* Page header */}
-          <div>
-            <h1 className="text-2xl font-semibold">Dashboard</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Overview of gift card inventory, spending, and community impact.
-            </p>
+        {/* ── Header ── */}
+        <div className="border-b h-12 flex items-center shrink-0 px-0">
+          <div className="flex items-center gap-4 pl-5 w-full">
+            <SidebarTrigger className="bg-white border border-[#e2e8f0] rounded-[6px] p-2 size-8 flex items-center justify-center" />
+            <Separator orientation="vertical" className="h-4 bg-[#e5e5e5]" />
+            <span className="font-medium text-[16px] text-[#0a0a0a]">Home</span>
           </div>
+        </div>
 
-          {/* KPI Cards */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Active Cards</CardDescription>
-                <CardTitle className="text-3xl font-semibold tabular-nums">
-                  {activeCards.length}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-1">
-                  {Object.entries(
-                    cards.reduce<Record<string, number>>((acc, c) => {
-                      acc[c.status] = (acc[c.status] ?? 0) + 1
-                      return acc
-                    }, {})
-                  ).map(([status, count]) => (
-                    <Badge key={status} variant="outline" className="text-xs">
-                      {count} {status}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+        <div className="flex flex-1 flex-col overflow-auto">
+          <div className="flex flex-col gap-6 p-6">
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Available Balance</CardDescription>
-                <CardTitle className="text-3xl font-semibold tabular-nums text-green-600">
-                  ${totalRemaining.toFixed(2)}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">Across all active cards</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Total Donated Out</CardDescription>
-                <CardTitle className="text-3xl font-semibold tabular-nums">
-                  ${totalDonatedOut.toLocaleString()}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  {donations.length} gift cards distributed
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Recipients Helped</CardDescription>
-                <CardTitle className="text-3xl font-semibold tabular-nums">
-                  {uniqueRecipients}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">Individuals and families</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Value Distribution treemap */}
-          <div className="border border-[#e2e8f0] rounded-[12px] p-5">
-            <p className="text-sm font-semibold text-[#0a0a0a]">Value Distribution</p>
-            <p className="text-xs text-[#737373] mt-0.5">Tile size = remaining balance · hover for details</p>
-            <div className="mt-4">
-              <ResponsiveContainer width="100%" height={220}>
-                <Treemap
-                  data={treemapData}
-                  dataKey="size"
-                  aspectRatio={16 / 9}
-                  content={(props) => <TreemapCell {...props} />}
-                >
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null
-                      const d = payload[0].payload
-                      return (
-                        <div className="bg-white border border-[#e2e8f0] rounded-[8px] shadow-md px-3 py-2 text-sm min-w-[140px]">
-                          <p className="font-semibold text-[#0a0a0a] mb-1">{d.name}</p>
-                          <div className="space-y-0.5 text-xs">
-                            <p className="text-green-600">Remaining: <span className="font-medium">${d.remaining?.toFixed(2)}</span></p>
-                            <p className="text-orange-500">Redeemed: <span className="font-medium">${d.redeemed?.toFixed(2)}</span></p>
-                            <p className="text-[#737373] mt-1">{d.category}</p>
-                          </div>
-                        </div>
-                      )
-                    }}
-                  />
-                </Treemap>
-              </ResponsiveContainer>
-              <div className="flex flex-wrap gap-4 mt-3 justify-center">
-                {Object.entries(CATEGORY_RAW).map(([c, color]) => (
-                  <div key={c} className="flex items-center gap-1.5 text-xs text-[#737373]">
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                    {c}
-                  </div>
+            {/* ── Quick Actions ── */}
+            <div className="flex flex-col gap-3">
+              <p className="text-base font-medium text-[#525252]">Quick Actions</p>
+              <div className="grid grid-cols-4 gap-4">
+                {([
+                  { href: "/add-card",    icon: Add01Icon,           label: "Add Gift Cards",   desc: "Active cards" },
+                  { href: "/redemption",  icon: ShoppingBasket01Icon, label: "Record Spend",     desc: "Log a purchase made with a gift card" },
+                  { href: "/donations",   icon: GiveBloodIcon,        label: "Record Donation",  desc: "Give a card to a recipient in need" },
+                  { href: "#inventory",   icon: Archive01Icon,        label: "View Inventory",   desc: "Browse all cards by store and category" },
+                ] as const).map(({ href, icon, label, desc }) => (
+                  <Link key={label} href={href} className="block">
+                    <div className="bg-[#fafafa] rounded-[18px] shadow-[0px_0px_0px_1px_rgba(10,10,10,0.1),0px_1px_2px_0px_rgba(0,0,0,0.05)] pt-[58px] pb-6 px-6 flex flex-col gap-2 hover:bg-[#f0f0f0] transition-colors cursor-pointer">
+                      <div className="bg-[rgba(0,133,200,0.1)] rounded-[10px] size-10 flex items-center justify-center shrink-0">
+                        <HugeiconsIcon icon={icon} strokeWidth={2} className="size-5 text-[#0085c8]" />
+                      </div>
+                      <div>
+                        <p className="text-[16px] font-medium text-[#404040]">{label}</p>
+                        <p className="text-[14px] text-[#737373] mt-0.5">{desc}</p>
+                      </div>
+                    </div>
+                  </Link>
                 ))}
               </div>
             </div>
-          </div>
 
-          {/* Quick Actions */}
-          <div>
-            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase mb-3">
-              Quick Actions
-            </p>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <Link href="/add-card" className="block">
-                <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-                  <CardContent className="pt-5 flex flex-col items-start gap-3">
-                    <div className="rounded-lg bg-primary/10 p-2.5">
-                      <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-5 text-primary" />
+            {/* ── Summary ── */}
+            <div className="flex flex-col gap-3">
+              <p className="text-base font-medium text-[#525252]">Summary</p>
+              <div className="grid grid-cols-3 gap-4">
+
+                {/* Total Cards */}
+                <div className="bg-[#fafafa] rounded-[18px] shadow-[0px_0px_0px_1px_rgba(10,10,10,0.1),0px_1px_2px_0px_rgba(0,0,0,0.05)] py-6 flex flex-col gap-4">
+                  <div className="flex items-start justify-between px-6">
+                    <div className="flex flex-col gap-2">
+                      <p className="text-[14px] text-[#737373]">Total Cards</p>
+                      <p className="text-[30px] font-semibold text-[#404040] leading-none">{totalCards}</p>
                     </div>
-                    <div>
-                      <p className="font-semibold text-sm">Add Gift Card</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Register a new card or bulk import via CSV
+                    <span className="bg-[#bbf7d0] text-[#166534] text-[12px] font-medium px-[7px] py-[2px] rounded-[26px] shrink-0">
+                      +{activeCount}
+                    </span>
+                  </div>
+                  <div className="px-6">
+                    <p className="text-[14px] font-medium text-[#525252]">Active cards</p>
+                  </div>
+                </div>
+
+                {/* Remaining Value */}
+                <div className="bg-[#fafafa] rounded-[18px] shadow-[0px_0px_0px_1px_rgba(10,10,10,0.1),0px_1px_2px_0px_rgba(0,0,0,0.05)] py-6 flex flex-col gap-4">
+                  <div className="flex items-start justify-between px-6">
+                    <div className="flex flex-col gap-2">
+                      <p className="text-[14px] text-[#737373]">Remaining Value</p>
+                      <p className="text-[30px] font-semibold text-[#404040] leading-none">
+                        ${Math.round(totalRemaining).toLocaleString()}
                       </p>
                     </div>
-                  </CardContent>
-                </Card>
-              </Link>
+                    <span className="bg-[#bbf7d0] text-[#166534] text-[12px] font-medium px-[7px] py-[2px] rounded-[26px] shrink-0">
+                      +{storeBreakdown.length}
+                    </span>
+                  </div>
+                  <div className="px-6">
+                    <p className="text-[14px] font-medium text-[#525252]">Available across all cards</p>
+                  </div>
+                </div>
 
-              <Link href="/redemption" className="block">
-                <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-                  <CardContent className="pt-5 flex flex-col items-start gap-3">
-                    <div className="rounded-lg bg-orange-500/10 p-2.5">
-                      <HugeiconsIcon icon={ShoppingBasket01Icon} strokeWidth={2} className="size-5 text-orange-500" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm">Record Spend</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Log a purchase made with a gift card
+                {/* Total Redeemed */}
+                <div className="bg-[#fafafa] rounded-[18px] shadow-[0px_0px_0px_1px_rgba(10,10,10,0.1),0px_1px_2px_0px_rgba(0,0,0,0.05)] py-6 flex flex-col gap-4">
+                  <div className="flex items-start justify-between px-6">
+                    <div className="flex flex-col gap-2">
+                      <p className="text-[14px] text-[#737373]">Total Redeemed</p>
+                      <p className="text-[30px] font-semibold text-[#404040] leading-none">
+                        ${Math.round(totalRedeemed).toLocaleString()}
                       </p>
                     </div>
-                  </CardContent>
-                </Card>
-              </Link>
+                    <span className="bg-[#bbf7d0] text-[#166534] text-[12px] font-medium px-[7px] py-[2px] rounded-[26px] shrink-0">
+                      +{storeBreakdown.length}
+                    </span>
+                  </div>
+                  <div className="px-6">
+                    <p className="text-[14px] font-medium text-[#525252]">Total value spent or donated out from all cards</p>
+                  </div>
+                </div>
 
-              <Link href="/redemption" className="block">
-                <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-                  <CardContent className="pt-5 flex flex-col items-start gap-3">
-                    <div className="rounded-lg bg-blue-500/10 p-2.5">
-                      <HugeiconsIcon icon={GiveBloodIcon} strokeWidth={2} className="size-5 text-blue-500" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm">Record Donation</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Give a card to a recipient in need
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-
-              <Link href="/inventory" className="block">
-                <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-                  <CardContent className="pt-5 flex flex-col items-start gap-3">
-                    <div className="rounded-lg bg-purple-500/10 p-2.5">
-                      <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} className="size-5 text-purple-500" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm">View Inventory</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Browse all cards by store and category
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
+              </div>
             </div>
-          </div>
 
-          {/* Low balance alert */}
-          {lowBalanceCards.length > 0 && (
-            <Card className="border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950/30">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <HugeiconsIcon icon={AlertCircleIcon} strokeWidth={2} className="size-4 text-yellow-600 shrink-0" />
-                  <CardTitle className="text-sm font-semibold text-yellow-900 dark:text-yellow-100">
-                    {lowBalanceCards.length} card{lowBalanceCards.length !== 1 ? "s" : ""} running low
-                  </CardTitle>
+            {/* ── Value Distribution ── */}
+            <div id="inventory" className="border border-[#e2e8f0] rounded-[12px] overflow-hidden">
+
+              {/* Card header */}
+              <div className="px-5 pt-5 pb-4">
+                <p className="text-sm font-semibold text-[#0a0a0a]">Gift Cards by Store</p>
+                <p className="text-xs text-[#737373] mt-0.5">Tile size = remaining balance · hover a tile for details</p>
+              </div>
+
+              {/* Treemap */}
+              <div className="px-5 pb-4">
+                {treemapData.length === 0 ? (
+                  <div className="flex h-[200px] items-center justify-center text-sm text-[#737373]">
+                    No remaining balance in this category.
+                  </div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <Treemap
+                        data={treemapData}
+                        dataKey="size"
+                        aspectRatio={16 / 9}
+                        content={(props) => <TreemapCell {...props} />}
+                      >
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (!active || !payload?.length) return null
+                            const d = payload[0].payload
+                            return (
+                              <div className="bg-white border border-[#e2e8f0] rounded-[8px] shadow-md px-3 py-2 text-sm min-w-[140px]">
+                                <p className="font-semibold text-[#0a0a0a] mb-1">{d.name}</p>
+                                <div className="space-y-0.5 text-xs">
+                                  <p className="text-green-600">Remaining: <span className="font-medium">${d.remaining?.toFixed(2)}</span></p>
+                                  <p className="text-orange-500">Redeemed: <span className="font-medium">${d.redeemed?.toFixed(2)}</span></p>
+                                  <p className="text-[#737373] mt-1">{d.category}</p>
+                                </div>
+                              </div>
+                            )
+                          }}
+                        />
+                      </Treemap>
+                    </ResponsiveContainer>
+                    <div className="flex flex-wrap gap-4 mt-3 justify-center">
+                      {Object.entries(CATEGORY_RAW).map(([c, color]) => (
+                        <div key={c} className="flex items-center gap-1.5 text-xs text-[#737373]">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                          {c}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Table section */}
+              <div className="mx-4 mb-4 border border-[#e2e8f0] rounded-[8px] overflow-hidden">
+
+              {/* Toolbar */}
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-[#e2e8f0] bg-white">
+                <div className="relative flex-1 max-w-xs">
+                  <HugeiconsIcon
+                    icon={Search01Icon}
+                    strokeWidth={1.5}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#a3a3a3] pointer-events-none"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search stores…"
+                    value={searchQuery}
+                    onChange={e => { setSearchQuery(e.target.value); setPage(1) }}
+                    className="w-full h-8 pl-8 pr-3 text-sm border border-[#e2e8f0] rounded-[6px] bg-white text-[#0a0a0a] placeholder:text-[#a3a3a3] focus:outline-none focus:ring-1 focus:ring-[#0f172a]"
+                  />
                 </div>
-                <CardDescription className="text-yellow-700 dark:text-yellow-400">
-                  These active cards have less than $20 remaining — consider using or replacing them soon.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {lowBalanceCards.map(c => (
-                    <div
-                      key={c.id}
-                      className="flex items-center gap-2 rounded-md border border-yellow-200 dark:border-yellow-800 bg-white dark:bg-yellow-950/50 px-3 py-1.5"
+                <div className="flex items-center gap-1.5">
+                  <Select value={activeCategory} onValueChange={handleCategoryChange}>
+                    <SelectTrigger size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map(cat => (
+                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-[#737373] ml-auto">
+                  {filteredStores.length} store{filteredStores.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-[#fafafa] hover:bg-[#fafafa]">
+                    <TableHead className="text-xs font-medium text-[#737373] py-3">Store</TableHead>
+                    <TableHead className="text-xs font-medium text-[#737373] py-3 text-right">Cards</TableHead>
+                    <TableHead className="text-xs font-medium text-[#737373] py-3 text-right">Remaining Balance</TableHead>
+                    <TableHead className="text-xs font-medium text-[#737373] py-3 text-right">Amount Spent</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedStores.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center text-sm text-[#737373] py-10">
+                        No stores match your search.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedStores.map(row => (
+                      <TableRow key={row.store} className="hover:bg-[#fafafa] border-[#e2e8f0]">
+                        <TableCell className="py-3">
+                          <p className="text-sm font-medium text-[#0a0a0a]">{row.store}</p>
+                          <p className="text-xs text-[#a3a3a3] mt-0.5">{row.category}</p>
+                        </TableCell>
+                        <TableCell className="text-sm text-[#525252] py-3 text-right align-middle">{row.count}</TableCell>
+                        <TableCell className="text-sm font-medium text-green-600 py-3 text-right align-middle">
+                          ${row.remaining.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-sm text-orange-500 py-3 text-right align-middle">
+                          ${row.redeemed.toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+
+              {/* Pagination footer */}
+              <div className="flex items-center justify-between px-4 py-3 border-t border-[#e2e8f0] bg-white">
+                <p className="text-xs text-[#737373]">
+                  {filteredStores.length} result{filteredStores.length !== 1 ? "s" : ""}
+                </p>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 text-xs text-[#737373]">
+                    <span>Rows per page</span>
+                    <select
+                      value={rowsPerPage}
+                      onChange={e => { setRowsPerPage(Number(e.target.value)); setPage(1) }}
+                      className="border border-[#e2e8f0] rounded-[4px] px-1.5 py-0.5 text-xs text-[#0a0a0a] bg-white"
                     >
-                      <HugeiconsIcon icon={CreditCardIcon} strokeWidth={2} className="size-3.5 text-yellow-600 shrink-0" />
-                      <span className="text-xs font-medium">{c.store}</span>
-                      <span className="text-xs text-muted-foreground">···· {c.last4}</span>
-                      <span className="text-xs font-bold text-yellow-700 dark:text-yellow-400">
-                        ${c.remainingBalance.toFixed(2)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Recent Activity — two columns */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-
-            {/* Recent Transactions */}
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-base">Recent Transactions</CardTitle>
-                    <CardDescription>Latest card activity</CardDescription>
+                      {ROWS_PER_PAGE_OPTIONS.map(n => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
                   </div>
-                  <Link href="/redemption">
-                    <Button variant="ghost" size="sm" className="text-xs h-7 -mt-0.5">
-                      View all
-                      <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className="ml-1 size-3.5" />
-                    </Button>
-                  </Link>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div>
-                  {recentTransactions.map((t, i) => {
-                    const card = cards.find(c => c.id === t.cardId)
-                    return (
-                      <div key={t.id}>
-                        {i > 0 && <Separator className="my-3" />}
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-sm font-medium">
-                                {card?.store ?? "Unknown"}
-                              </span>
-                              <span className="text-xs text-muted-foreground">···· {card?.last4}</span>
-                              <Badge
-                                variant="outline"
-                                className={`text-xs ${
-                                  t.type === "donation"
-                                    ? "text-blue-600 border-blue-300 dark:border-blue-800"
-                                    : "text-orange-600 border-orange-300 dark:border-orange-800"
-                                }`}
-                              >
-                                {t.type}
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                              {t.volunteer}{t.notes ? ` · ${t.notes}` : ""}
-                            </p>
-                          </div>
-                          <span className="text-sm font-semibold shrink-0">
-                            −${t.amount.toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Recent Donations Given */}
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-base">Recent Donations Given</CardTitle>
-                    <CardDescription>Gift cards distributed to the community</CardDescription>
+                  <p className="text-xs text-[#737373]">Page {safePage} of {totalPages}</p>
+                  <div className="flex items-center gap-1">
+                    <PagBtn onClick={() => setPage(1)} disabled={safePage === 1}>«</PagBtn>
+                    <PagBtn onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1}>‹</PagBtn>
+                    <PagBtn onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}>›</PagBtn>
+                    <PagBtn onClick={() => setPage(totalPages)} disabled={safePage === totalPages}>»</PagBtn>
                   </div>
-                  <Link href="/donations">
-                    <Button variant="ghost" size="sm" className="text-xs h-7 -mt-0.5">
-                      View all
-                      <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} className="ml-1 size-3.5" />
-                    </Button>
-                  </Link>
                 </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div>
-                  {recentDonations.map((d, i) => (
-                    <div key={d.id}>
-                      {i > 0 && <Separator className="my-3" />}
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{d.recipient}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                            {d.store} · {d.volunteer} ·{" "}
-                            {new Date(d.date).toLocaleDateString("en-US", {
-                              month: "short", day: "numeric", year: "numeric",
-                            })}
-                          </p>
-                        </div>
-                        <span className="text-sm font-semibold text-blue-600 shrink-0">
-                          ${d.amount}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+
+              </div>{/* end table section */}
+            </div>
 
           </div>
-
-          {/* Bottom links */}
-          <div className="flex items-center justify-center gap-6 pb-2">
-            <Link href="/inventory">
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground gap-1.5">
-                <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} className="size-3.5" />
-                Inventory
-              </Button>
-            </Link>
-            <Link href="/donations">
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground gap-1.5">
-                <HugeiconsIcon icon={UserGroupIcon} strokeWidth={2} className="size-3.5" />
-                All Donations
-              </Button>
-            </Link>
-            <Link href="/redemption">
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground gap-1.5">
-                <HugeiconsIcon icon={DollarCircleIcon} strokeWidth={2} className="size-3.5" />
-                Spending Log
-              </Button>
-            </Link>
-            <Link href="/add-card">
-              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground gap-1.5">
-                <HugeiconsIcon icon={ChartHistogramIcon} strokeWidth={2} className="size-3.5" />
-                Add Cards
-              </Button>
-            </Link>
-          </div>
-
         </div>
       </SidebarInset>
     </SidebarProvider>

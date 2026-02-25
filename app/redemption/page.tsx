@@ -1,16 +1,25 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import * as React from "react"
 import { AppSidebar } from "@/components/app-sidebar"
-import { SiteHeader } from "@/components/site-header"
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { Separator } from "@/components/ui/separator"
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table"
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { HugeiconsIcon } from "@hugeicons/react"
+import {
+  Search01Icon, ArrowDown01Icon, ArrowUp01Icon,
+  ShoppingBasket01Icon, GiveBloodIcon,
+} from "@hugeicons/core-free-icons"
 import rawData from "./data.json"
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type GiftCard = {
   id: number
@@ -34,452 +43,484 @@ type Transaction = {
   notes: string
 }
 
-type DataStore = {
-  cards: GiftCard[]
-  transactions: Transaction[]
+type DataStore = { cards: GiftCard[]; transactions: Transaction[] }
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const VOLUNTEERS = ["Sarah Johnson", "Mike Davis", "Lisa Chen", "James Lee", "Amy Brown"]
+
+function statusStyle(status: string) {
+  if (status === "Active")  return "bg-[#bbf7d0] text-[#166534]"
+  if (status === "Used")    return "bg-[#f5f5f5] text-[#525252]"
+  if (status === "Donated") return "bg-[#bfdbfe] text-[#1e40af]"
+  return "bg-[#fef9c3] text-[#854d0e]"
 }
 
-const uniqueStores = [...new Set((rawData as DataStore).cards.map((c) => c.store))].sort()
-const volunteers = ["Sarah Johnson", "Mike Davis", "Lisa Chen", "James Lee", "Amy Brown"]
+function fmt(iso: string) {
+  return new Date(iso).toLocaleString("en-US", {
+    month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit", hour12: true,
+  })
+}
 
-export default function RedemptionPage() {
-  const [data, setData] = useState<DataStore>(rawData as DataStore)
+// ── Page ──────────────────────────────────────────────────────────────────────
 
-  // Search state
-  const [searchStore, setSearchStore] = useState("")
-  const [searchLast4, setSearchLast4] = useState("")
-  const [selectedCard, setSelectedCard] = useState<GiftCard | null>(null)
-  const [searchError, setSearchError] = useState("")
+export default function InventoryPage() {
+  const [data, setData] = React.useState<DataStore>(rawData as DataStore)
+  const [searchStore, setSearchStore] = React.useState("")
+  const [searchLast4, setSearchLast4] = React.useState("")
+  const [selectedId, setSelectedId] = React.useState<number | null>(null)
 
-  // Spend form state
-  const [showSpendForm, setShowSpendForm] = useState(false)
-  const [spendAmount, setSpendAmount] = useState("")
-  const [spendVolunteer, setSpendVolunteer] = useState("")
-  const [spendNotes, setSpendNotes] = useState("")
-  const [spendError, setSpendError] = useState("")
+  // Spend form
+  const [showSpend, setShowSpend] = React.useState(false)
+  const [spendAmt, setSpendAmt] = React.useState("")
+  const [spendVol, setSpendVol] = React.useState("")
+  const [spendNotes, setSpendNotes] = React.useState("")
+  const [spendErr, setSpendErr] = React.useState("")
 
-  // Donation form state
-  const [showDonationForm, setShowDonationForm] = useState(false)
-  const [donationFull, setDonationFull] = useState(false)
-  const [donationAmount, setDonationAmount] = useState("")
-  const [donationRecipient, setDonationRecipient] = useState("")
-  const [donationVolunteer, setDonationVolunteer] = useState("")
-  const [donationNotes, setDonationNotes] = useState("")
-  const [donationError, setDonationError] = useState("")
+  // Donation form
+  const [showDonate, setShowDonate] = React.useState(false)
+  const [donateFull, setDonateFull] = React.useState(true)
+  const [donateAmt, setDonateAmt] = React.useState("")
+  const [donateRecip, setDonateRecip] = React.useState("")
+  const [donateVol, setDonateVol] = React.useState("")
+  const [donateNotes, setDonateNotes] = React.useState("")
+  const [donateErr, setDonateErr] = React.useState("")
 
-  const cardTransactions = useMemo(() => {
-    if (!selectedCard) return []
+  const uniqueStores = React.useMemo(() =>
+    [...new Set(data.cards.map(c => c.store))].sort(), [data.cards])
+
+  const filteredCards = React.useMemo(() =>
+    data.cards.filter(c => {
+      if (searchStore && c.store !== searchStore) return false
+      if (searchLast4 && !c.last4.startsWith(searchLast4)) return false
+      return true
+    }), [data.cards, searchStore, searchLast4])
+
+  const selectedCard = data.cards.find(c => c.id === selectedId) ?? null
+
+  const cardTxns = React.useMemo(() => {
+    if (!selectedId) return []
     return data.transactions
-      .filter((t) => t.cardId === selectedCard.id)
+      .filter(t => t.cardId === selectedId)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  }, [selectedCard, data.transactions])
+  }, [selectedId, data.transactions])
 
-  function handleSearch() {
-    setSearchError("")
-    setSelectedCard(null)
-    setShowSpendForm(false)
-    setShowDonationForm(false)
+  const totalCards     = data.cards.length
+  const activeCards    = data.cards.filter(c => c.status === "Active").length
+  const totalRemaining = data.cards.reduce((s, c) => s + c.remainingBalance, 0)
+  const totalInitial   = data.cards.reduce((s, c) => s + c.initialBalance, 0)
 
-    if (!searchStore) {
-      setSearchError("Please select a store.")
-      return
+  function selectCard(id: number) {
+    if (selectedId === id) {
+      setSelectedId(null)
+    } else {
+      setSelectedId(id)
+      setShowSpend(false); setShowDonate(false)
+      setSpendAmt(""); setSpendVol(""); setSpendNotes(""); setSpendErr("")
+      setDonateAmt(""); setDonateRecip(""); setDonateVol(""); setDonateNotes("")
+      setDonateErr(""); setDonateFull(true)
     }
-    if (!searchLast4 || searchLast4.length !== 4) {
-      setSearchError("Please enter the last 4 digits of the card.")
-      return
-    }
-
-    const found = data.cards.find(
-      (c) => c.store === searchStore && c.last4 === searchLast4
-    )
-
-    if (!found) {
-      setSearchError("No card found with that store and last 4 digits.")
-      return
-    }
-
-    setSelectedCard(found)
   }
 
-  function handleRecordSpend() {
-    setSpendError("")
-    if (!spendAmount || isNaN(Number(spendAmount)) || Number(spendAmount) <= 0) {
-      setSpendError("Enter a valid amount.")
-      return
-    }
-    if (!spendVolunteer) {
-      setSpendError("Please select a volunteer.")
-      return
-    }
-    const amount = Number(Number(spendAmount).toFixed(2))
+  function handleSpend() {
+    setSpendErr("")
+    const amount = Number(Number(spendAmt).toFixed(2))
+    if (!spendAmt || isNaN(amount) || amount <= 0) { setSpendErr("Enter a valid amount."); return }
+    if (!spendVol) { setSpendErr("Please select a volunteer."); return }
     if (amount > selectedCard!.remainingBalance) {
-      setSpendError(`Amount exceeds remaining balance of $${selectedCard!.remainingBalance.toFixed(2)}.`)
-      return
+      setSpendErr(`Exceeds remaining balance of $${selectedCard!.remainingBalance.toFixed(2)}.`); return
     }
-
-    const newTransaction: Transaction = {
-      id: data.transactions.length + 1,
-      cardId: selectedCard!.id,
-      date: new Date().toISOString(),
-      type: "spend",
-      amount,
-      volunteer: spendVolunteer,
-      recipient: null,
-      notes: spendNotes,
-    }
-
-    const newBalance = selectedCard!.remainingBalance - amount
-    const updatedCards = data.cards.map((c) =>
-      c.id === selectedCard!.id
-        ? { ...c, remainingBalance: newBalance, status: newBalance === 0 ? "Used" : c.status }
-        : c
-    )
-    const updatedCard = updatedCards.find((c) => c.id === selectedCard!.id)!
-
-    setData({ cards: updatedCards, transactions: [...data.transactions, newTransaction] })
-    setSelectedCard(updatedCard)
-    setShowSpendForm(false)
-    setSpendAmount("")
-    setSpendVolunteer("")
-    setSpendNotes("")
+    const newBal = selectedCard!.remainingBalance - amount
+    setData(d => ({
+      cards: d.cards.map(c => c.id === selectedId
+        ? { ...c, remainingBalance: newBal, status: newBal === 0 ? "Used" : c.status }
+        : c),
+      transactions: [...d.transactions, {
+        id: d.transactions.length + 1, cardId: selectedId!, date: new Date().toISOString(),
+        type: "spend", amount, volunteer: spendVol, recipient: null, notes: spendNotes,
+      }],
+    }))
+    setShowSpend(false); setSpendAmt(""); setSpendVol(""); setSpendNotes("")
   }
 
-  function handleRecordDonation() {
-    setDonationError("")
-    if (!donationVolunteer) {
-      setDonationError("Please select a volunteer.")
-      return
-    }
-    if (!donationRecipient.trim()) {
-      setDonationError("Please enter a recipient name.")
-      return
-    }
-
+  function handleDonate() {
+    setDonateErr("")
+    if (!donateVol) { setDonateErr("Please select a volunteer."); return }
+    if (!donateRecip.trim()) { setDonateErr("Please enter a recipient name."); return }
     let amount: number
-    if (donationFull) {
+    if (donateFull) {
       amount = selectedCard!.remainingBalance
     } else {
-      if (!donationAmount || isNaN(Number(donationAmount)) || Number(donationAmount) <= 0) {
-        setDonationError("Enter a valid amount.")
-        return
-      }
-      amount = Number(Number(donationAmount).toFixed(2))
+      amount = Number(Number(donateAmt).toFixed(2))
+      if (!donateAmt || isNaN(amount) || amount <= 0) { setDonateErr("Enter a valid amount."); return }
       if (amount > selectedCard!.remainingBalance) {
-        setDonationError(`Amount exceeds remaining balance of $${selectedCard!.remainingBalance.toFixed(2)}.`)
-        return
+        setDonateErr(`Exceeds remaining balance of $${selectedCard!.remainingBalance.toFixed(2)}.`); return
       }
     }
-
-    const newTransaction: Transaction = {
-      id: data.transactions.length + 1,
-      cardId: selectedCard!.id,
-      date: new Date().toISOString(),
-      type: "donation",
-      amount,
-      volunteer: donationVolunteer,
-      recipient: donationRecipient,
-      notes: donationNotes,
-    }
-
-    const newBalance = selectedCard!.remainingBalance - amount
-    const updatedCards = data.cards.map((c) =>
-      c.id === selectedCard!.id
-        ? { ...c, remainingBalance: newBalance, status: newBalance === 0 ? "Donated" : c.status }
-        : c
-    )
-    const updatedCard = updatedCards.find((c) => c.id === selectedCard!.id)!
-
-    setData({ cards: updatedCards, transactions: [...data.transactions, newTransaction] })
-    setSelectedCard(updatedCard)
-    setShowDonationForm(false)
-    setDonationAmount("")
-    setDonationRecipient("")
-    setDonationVolunteer("")
-    setDonationNotes("")
-    setDonationFull(false)
-  }
-
-  function formatDate(iso: string) {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short", day: "numeric", year: "numeric",
-      hour: "numeric", minute: "2-digit", hour12: true,
-    })
-  }
-
-  function getStatusColor(status: string) {
-    if (status === "Active") return "bg-green-100 text-green-800"
-    if (status === "Used") return "bg-gray-100 text-gray-700"
-    if (status === "Donated") return "bg-blue-100 text-blue-800"
-    return "bg-yellow-100 text-yellow-800"
+    const newBal = selectedCard!.remainingBalance - amount
+    setData(d => ({
+      cards: d.cards.map(c => c.id === selectedId
+        ? { ...c, remainingBalance: newBal, status: newBal === 0 ? "Donated" : c.status }
+        : c),
+      transactions: [...d.transactions, {
+        id: d.transactions.length + 1, cardId: selectedId!, date: new Date().toISOString(),
+        type: "donation", amount, volunteer: donateVol, recipient: donateRecip, notes: donateNotes,
+      }],
+    }))
+    setShowDonate(false)
+    setDonateAmt(""); setDonateRecip(""); setDonateVol(""); setDonateNotes(""); setDonateFull(true)
   }
 
   return (
     <SidebarProvider>
       <AppSidebar variant="inset" />
       <SidebarInset>
-        <SiteHeader />
-        <div className="flex flex-1 flex-col gap-6 p-6">
 
-          {/* Page Header */}
-          <div>
-            <h1 className="text-2xl font-bold">Redemption</h1>
-            <p className="text-muted-foreground text-sm mt-1">Search for a gift card and record spends or donations.</p>
+        {/* ── Header ── */}
+        <div className="border-b h-12 flex items-center shrink-0">
+          <div className="flex items-center gap-4 pl-5">
+            <SidebarTrigger className="bg-white border border-[#e2e8f0] rounded-[6px] p-2 size-8 flex items-center justify-center" />
+            <Separator orientation="vertical" className="h-4 bg-[#e5e5e5]" />
+            <span className="font-medium text-[16px] text-[#0a0a0a]">Card Inventory</span>
           </div>
+        </div>
 
-          {/* Search Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Search Gift Card</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col sm:flex-row gap-3 items-end">
-                <div className="flex-1 space-y-1">
-                  <Label>Store</Label>
+        <div className="flex flex-1 flex-col overflow-auto">
+          <div className="flex flex-col gap-6 p-6">
+
+            {/* ── Stats ── */}
+            <div className="grid grid-cols-4 gap-4">
+              {[
+                { label: "Total Cards",      value: totalCards,   sub: "All gift cards in system" },
+                { label: "Active Cards",     value: activeCards,  sub: "Cards with remaining balance" },
+                { label: "Total Remaining",  value: `$${totalRemaining.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, sub: "Available across all cards" },
+                { label: "Total Initial",    value: `$${totalInitial.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,    sub: "Value of all cards received" },
+              ].map(s => (
+                <div key={s.label} className="border border-[#e2e8f0] rounded-[12px] p-5">
+                  <p className="text-xs font-medium text-[#737373]">{s.label}</p>
+                  <p className="text-[28px] font-semibold text-[#0a0a0a] mt-1 leading-none">{s.value}</p>
+                  <p className="text-xs text-[#737373] mt-2">{s.sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* ── Inventory card ── */}
+            <div className="bg-white border border-[#e2e8f0] rounded-[12px] overflow-hidden">
+
+              {/* Card header + search filters */}
+              <div className="px-6 py-4 border-b border-[#e2e8f0]">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[#0a0a0a]">Gift Card Inventory</p>
+                    <p className="text-xs text-[#737373] mt-0.5">Click a row to record a spend, donation, or view history</p>
+                  </div>
+                  <p className="text-xs text-[#737373]">{filteredCards.length} of {data.cards.length} cards</p>
+                </div>
+                <div className="flex gap-3">
                   <Select value={searchStore} onValueChange={setSearchStore}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select store" />
+                    <SelectTrigger size="sm" className="w-44 rounded-[6px]">
+                      <SelectValue placeholder="All Stores" />
                     </SelectTrigger>
                     <SelectContent>
-                      {uniqueStores.map((s) => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
-                      ))}
+                      <SelectItem value="">All Stores</SelectItem>
+                      {uniqueStores.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="w-full sm:w-40 space-y-1">
-                  <Label>Last 4 Digits</Label>
-                  <Input
-                    placeholder="e.g. 1234"
-                    maxLength={4}
-                    value={searchLast4}
-                    onChange={(e) => setSearchLast4(e.target.value.replace(/\D/g, ""))}
-                  />
-                </div>
-                <Button onClick={handleSearch} className="w-full sm:w-auto">Search</Button>
-              </div>
-              {searchError && <p className="text-sm text-red-500 mt-2">{searchError}</p>}
-            </CardContent>
-          </Card>
-
-          {/* Card Detail */}
-          {selectedCard && (
-            <>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-base">Card Details</CardTitle>
-                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${getStatusColor(selectedCard.status)}`}>
-                    {selectedCard.status}
-                  </span>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Store</p>
-                      <p className="font-semibold">{selectedCard.store}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Card (Last 4)</p>
-                      <p className="font-semibold">•••• {selectedCard.last4}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Initial Balance</p>
-                      <p className="font-semibold">${selectedCard.initialBalance.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Remaining Balance</p>
-                      <p className={`text-lg font-bold ${selectedCard.remainingBalance === 0 ? "text-red-500" : "text-green-600"}`}>
-                        ${selectedCard.remainingBalance.toFixed(2)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Added On</p>
-                      <p className="font-medium text-sm">{selectedCard.addedDate}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Added By</p>
-                      <p className="font-medium text-sm">{selectedCard.addedBy}</p>
-                    </div>
+                  <div className="relative">
+                    <HugeiconsIcon icon={Search01Icon} strokeWidth={1.5} className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#a3a3a3] pointer-events-none" />
+                    <Input
+                      placeholder="Last 4 digits…"
+                      maxLength={4}
+                      value={searchLast4}
+                      onChange={e => setSearchLast4(e.target.value.replace(/\D/g, ""))}
+                      className="h-8 pl-8 text-sm rounded-[6px] w-36"
+                    />
                   </div>
+                </div>
+              </div>
 
-                  {/* Action Buttons */}
-                  {selectedCard.remainingBalance > 0 && (
-                    <div className="flex gap-3 flex-wrap">
-                      <Button
-                        onClick={() => { setShowSpendForm(!showSpendForm); setShowDonationForm(false) }}
-                        variant={showSpendForm ? "default" : "outline"}
-                      >
-                        Record Spend
-                      </Button>
-                      <Button
-                        onClick={() => { setShowDonationForm(!showDonationForm); setShowSpendForm(false) }}
-                        variant={showDonationForm ? "default" : "outline"}
-                      >
-                        Record Donation Out
-                      </Button>
-                    </div>
-                  )}
+              {/* Table */}
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-[#fafafa] hover:bg-[#fafafa]">
+                    <TableHead className="text-xs font-medium text-[#737373] py-3 pl-6">Store</TableHead>
+                    <TableHead className="text-xs font-medium text-[#737373] py-3">Card</TableHead>
+                    <TableHead className="text-xs font-medium text-[#737373] py-3">Initial Balance</TableHead>
+                    <TableHead className="text-xs font-medium text-[#737373] py-3">Remaining</TableHead>
+                    <TableHead className="text-xs font-medium text-[#737373] py-3">Status</TableHead>
+                    <TableHead className="text-xs font-medium text-[#737373] py-3">Added By</TableHead>
+                    <TableHead className="text-xs font-medium text-[#737373] py-3 pr-6" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCards.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="h-24 text-center text-[#737373] text-sm">
+                        No cards match your search.
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredCards.map(card => {
+                    const isOpen = selectedId === card.id
+                    const pct = card.initialBalance > 0
+                      ? (card.remainingBalance / card.initialBalance) * 100
+                      : 0
 
-                  {/* Spend Form */}
-                  {showSpendForm && (
-                    <div className="mt-4 p-4 border rounded-lg bg-muted/30 space-y-3">
-                      <p className="font-medium text-sm">Record a Spend</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <Label>Amount ($)</Label>
-                          <Input
-                            type="number"
-                            min="0.01"
-                            step="0.01"
-                            placeholder="0.00"
-                            value={spendAmount}
-                            onChange={(e) => setSpendAmount(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label>Volunteer</Label>
-                          <Select value={spendVolunteer} onValueChange={setSpendVolunteer}>
-                            <SelectTrigger><SelectValue placeholder="Select volunteer" /></SelectTrigger>
-                            <SelectContent>
-                              {volunteers.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="sm:col-span-2 space-y-1">
-                          <Label>Notes (optional)</Label>
-                          <Input
-                            placeholder="e.g. Groceries for Family A"
-                            value={spendNotes}
-                            onChange={(e) => setSpendNotes(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                      {spendError && <p className="text-sm text-red-500">{spendError}</p>}
-                      <div className="flex gap-2 pt-1">
-                        <Button onClick={handleRecordSpend} size="sm">Confirm Spend</Button>
-                        <Button variant="ghost" size="sm" onClick={() => { setShowSpendForm(false); setSpendError("") }}>Cancel</Button>
-                      </div>
-                    </div>
-                  )}
+                    return (
+                      <React.Fragment key={card.id}>
 
-                  {/* Donation Form */}
-                  {showDonationForm && (
-                    <div className="mt-4 p-4 border rounded-lg bg-muted/30 space-y-3">
-                      <p className="font-medium text-sm">Record a Donation Out</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <Label>Recipient</Label>
-                          <Input
-                            placeholder="e.g. Family A"
-                            value={donationRecipient}
-                            onChange={(e) => setDonationRecipient(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label>Volunteer</Label>
-                          <Select value={donationVolunteer} onValueChange={setDonationVolunteer}>
-                            <SelectTrigger><SelectValue placeholder="Select volunteer" /></SelectTrigger>
-                            <SelectContent>
-                              {volunteers.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1">
-                          <Label>Donation Type</Label>
-                          <div className="flex gap-3 pt-1">
-                            <label className="flex items-center gap-2 text-sm cursor-pointer">
-                              <input
-                                type="radio"
-                                checked={donationFull}
-                                onChange={() => { setDonationFull(true); setDonationAmount("") }}
-                              />
-                              Full card (${selectedCard.remainingBalance.toFixed(2)})
-                            </label>
-                            <label className="flex items-center gap-2 text-sm cursor-pointer">
-                              <input
-                                type="radio"
-                                checked={!donationFull}
-                                onChange={() => setDonationFull(false)}
-                              />
-                              Partial amount
-                            </label>
-                          </div>
-                        </div>
-                        {!donationFull && (
-                          <div className="space-y-1">
-                            <Label>Amount ($)</Label>
-                            <Input
-                              type="number"
-                              min="0.01"
-                              step="0.01"
-                              placeholder="0.00"
-                              value={donationAmount}
-                              onChange={(e) => setDonationAmount(e.target.value)}
+                        {/* Card row */}
+                        <TableRow
+                          className={`border-[#e2e8f0] cursor-pointer transition-colors ${isOpen ? "bg-[#f8faff]" : "hover:bg-[#fafafa]"}`}
+                          onClick={() => selectCard(card.id)}
+                        >
+                          <TableCell className="text-sm font-medium text-[#0a0a0a] py-3 pl-6">{card.store}</TableCell>
+                          <TableCell className="text-sm text-[#525252] py-3 font-mono tracking-wide align-middle">•••• {card.last4}</TableCell>
+                          <TableCell className="text-sm text-[#525252] py-3 align-middle">${card.initialBalance.toFixed(2)}</TableCell>
+                          <TableCell className="py-3 align-middle">
+                            <div className="flex flex-col gap-1">
+                              <span className={`text-sm font-medium ${card.remainingBalance === 0 ? "text-[#a3a3a3]" : "text-[#166534]"}`}>
+                                ${card.remainingBalance.toFixed(2)}
+                              </span>
+                              <div className="w-20 h-1 bg-[#e2e8f0] rounded-full overflow-hidden">
+                                <div className="h-full bg-[#22c55e] rounded-full" style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 align-middle">
+                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusStyle(card.status)}`}>
+                              {card.status}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-sm text-[#525252] py-3 align-middle">{card.addedBy}</TableCell>
+                          <TableCell className="py-3 pr-6 align-middle text-right">
+                            <HugeiconsIcon
+                              icon={isOpen ? ArrowUp01Icon : ArrowDown01Icon}
+                              strokeWidth={2}
+                              className="size-4 text-[#a3a3a3] inline-block"
                             />
-                          </div>
-                        )}
-                        <div className="sm:col-span-2 space-y-1">
-                          <Label>Notes (optional)</Label>
-                          <Input
-                            placeholder="e.g. Donated to family for weekly groceries"
-                            value={donationNotes}
-                            onChange={(e) => setDonationNotes(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                      {donationError && <p className="text-sm text-red-500">{donationError}</p>}
-                      <div className="flex gap-2 pt-1">
-                        <Button onClick={handleRecordDonation} size="sm">Confirm Donation</Button>
-                        <Button variant="ghost" size="sm" onClick={() => { setShowDonationForm(false); setDonationError("") }}>Cancel</Button>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                          </TableCell>
+                        </TableRow>
 
-              {/* Transaction History */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Transaction History</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {cardTransactions.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">No transactions recorded for this card.</p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b text-muted-foreground text-left">
-                            <th className="pb-2 pr-4 font-medium">Date & Time</th>
-                            <th className="pb-2 pr-4 font-medium">Type</th>
-                            <th className="pb-2 pr-4 font-medium">Amount</th>
-                            <th className="pb-2 pr-4 font-medium">Volunteer</th>
-                            <th className="pb-2 pr-4 font-medium">Recipient</th>
-                            <th className="pb-2 font-medium">Notes</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {cardTransactions.map((t) => (
-                            <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
-                              <td className="py-3 pr-4 whitespace-nowrap">{formatDate(t.date)}</td>
-                              <td className="py-3 pr-4">
-                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${t.type === "spend" ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"}`}>
-                                  {t.type === "spend" ? "Spend" : "Donation"}
-                                </span>
-                              </td>
-                              <td className="py-3 pr-4 font-medium">-${t.amount.toFixed(2)}</td>
-                              <td className="py-3 pr-4">{t.volunteer}</td>
-                              <td className="py-3 pr-4">{t.recipient ?? "—"}</td>
-                              <td className="py-3 text-muted-foreground">{t.notes || "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </>
-          )}
+                        {/* Expanded detail panel */}
+                        {isOpen && selectedCard && (
+                          <TableRow className="bg-[#f8faff] hover:bg-[#f8faff] border-[#e2e8f0]">
+                            <TableCell colSpan={7} className="p-0">
+                              <div className="px-6 py-5 border-t border-[#dbeafe]">
+
+                                {/* Action buttons — only if balance remains */}
+                                {selectedCard.remainingBalance > 0 && (
+                                  <div className="flex gap-2 mb-4">
+                                    <button
+                                      onClick={() => { setShowSpend(v => !v); setShowDonate(false) }}
+                                      className={`flex items-center gap-1.5 text-sm font-medium px-3.5 py-2 rounded-[6px] border transition-colors ${showSpend ? "bg-[#0a0a0a] text-white border-[#0a0a0a]" : "bg-white text-[#0a0a0a] border-[#e2e8f0] hover:bg-[#fafafa]"}`}
+                                    >
+                                      <HugeiconsIcon icon={ShoppingBasket01Icon} strokeWidth={2} className="size-4" />
+                                      Record Spend
+                                    </button>
+                                    <button
+                                      onClick={() => { setShowDonate(v => !v); setShowSpend(false) }}
+                                      className={`flex items-center gap-1.5 text-sm font-medium px-3.5 py-2 rounded-[6px] border transition-colors ${showDonate ? "bg-[#0a0a0a] text-white border-[#0a0a0a]" : "bg-white text-[#0a0a0a] border-[#e2e8f0] hover:bg-[#fafafa]"}`}
+                                    >
+                                      <HugeiconsIcon icon={GiveBloodIcon} strokeWidth={2} className="size-4" />
+                                      Record Donation
+                                    </button>
+                                  </div>
+                                )}
+
+                                {/* Spend form */}
+                                {showSpend && (
+                                  <div className="mb-5 bg-white border border-[#e2e8f0] rounded-[8px] p-4 space-y-3">
+                                    <p className="text-sm font-semibold text-[#0a0a0a]">Record a Spend</p>
+                                    <div className="grid grid-cols-3 gap-3">
+                                      <div className="space-y-1.5">
+                                        <Label className="text-xs font-medium text-[#737373]">Amount ($)</Label>
+                                        <Input
+                                          type="number" min="0.01" step="0.01" placeholder="0.00"
+                                          value={spendAmt} onChange={e => setSpendAmt(e.target.value)}
+                                          className="h-8 text-sm rounded-[6px]"
+                                        />
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <Label className="text-xs font-medium text-[#737373]">Volunteer</Label>
+                                        <Select value={spendVol} onValueChange={setSpendVol}>
+                                          <SelectTrigger size="sm" className="rounded-[6px]">
+                                            <SelectValue placeholder="Select volunteer" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {VOLUNTEERS.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <Label className="text-xs font-medium text-[#737373]">Notes (optional)</Label>
+                                        <Input
+                                          placeholder="e.g. Groceries for Family A"
+                                          value={spendNotes} onChange={e => setSpendNotes(e.target.value)}
+                                          className="h-8 text-sm rounded-[6px]"
+                                        />
+                                      </div>
+                                    </div>
+                                    {spendErr && <p className="text-xs text-red-500">{spendErr}</p>}
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={handleSpend}
+                                        className="text-sm font-medium bg-[#0a0a0a] text-white px-3.5 py-1.5 rounded-[6px] hover:bg-[#262626] transition-colors"
+                                      >
+                                        Confirm Spend
+                                      </button>
+                                      <button
+                                        onClick={() => { setShowSpend(false); setSpendErr("") }}
+                                        className="text-sm font-medium text-[#737373] px-3.5 py-1.5 rounded-[6px] hover:bg-white transition-colors"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Donation form */}
+                                {showDonate && (
+                                  <div className="mb-5 bg-white border border-[#e2e8f0] rounded-[8px] p-4 space-y-3">
+                                    <p className="text-sm font-semibold text-[#0a0a0a]">Record a Donation Out</p>
+                                    <div className="grid grid-cols-3 gap-3">
+                                      <div className="space-y-1.5">
+                                        <Label className="text-xs font-medium text-[#737373]">Recipient</Label>
+                                        <Input
+                                          placeholder="e.g. Family A"
+                                          value={donateRecip} onChange={e => setDonateRecip(e.target.value)}
+                                          className="h-8 text-sm rounded-[6px]"
+                                        />
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <Label className="text-xs font-medium text-[#737373]">Volunteer</Label>
+                                        <Select value={donateVol} onValueChange={setDonateVol}>
+                                          <SelectTrigger size="sm" className="rounded-[6px]">
+                                            <SelectValue placeholder="Select volunteer" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {VOLUNTEERS.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <Label className="text-xs font-medium text-[#737373]">Amount</Label>
+                                        <div className="flex gap-3 items-center pt-0.5">
+                                          <label className="flex items-center gap-1.5 text-xs text-[#525252] cursor-pointer">
+                                            <input
+                                              type="radio" checked={donateFull}
+                                              onChange={() => { setDonateFull(true); setDonateAmt("") }}
+                                              className="accent-[#0a0a0a]"
+                                            />
+                                            Full (${selectedCard.remainingBalance.toFixed(2)})
+                                          </label>
+                                          <label className="flex items-center gap-1.5 text-xs text-[#525252] cursor-pointer">
+                                            <input
+                                              type="radio" checked={!donateFull}
+                                              onChange={() => setDonateFull(false)}
+                                              className="accent-[#0a0a0a]"
+                                            />
+                                            Partial
+                                          </label>
+                                        </div>
+                                        {!donateFull && (
+                                          <Input
+                                            type="number" min="0.01" step="0.01" placeholder="0.00"
+                                            value={donateAmt} onChange={e => setDonateAmt(e.target.value)}
+                                            className="h-8 text-sm rounded-[6px] mt-1.5"
+                                          />
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      <Label className="text-xs font-medium text-[#737373]">Notes (optional)</Label>
+                                      <Input
+                                        placeholder="e.g. Weekly groceries for the family"
+                                        value={donateNotes} onChange={e => setDonateNotes(e.target.value)}
+                                        className="h-8 text-sm rounded-[6px]"
+                                      />
+                                    </div>
+                                    {donateErr && <p className="text-xs text-red-500">{donateErr}</p>}
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={handleDonate}
+                                        className="text-sm font-medium bg-[#0a0a0a] text-white px-3.5 py-1.5 rounded-[6px] hover:bg-[#262626] transition-colors"
+                                      >
+                                        Confirm Donation
+                                      </button>
+                                      <button
+                                        onClick={() => { setShowDonate(false); setDonateErr("") }}
+                                        className="text-sm font-medium text-[#737373] px-3.5 py-1.5 rounded-[6px] hover:bg-white transition-colors"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Transaction history */}
+                                <div>
+                                  <p className="text-xs font-semibold text-[#737373] uppercase tracking-wide mb-3">
+                                    Transaction History
+                                  </p>
+                                  {cardTxns.length === 0 ? (
+                                    <p className="text-sm text-[#a3a3a3] text-center py-4">
+                                      No transactions recorded for this card.
+                                    </p>
+                                  ) : (
+                                    <div className="bg-white border border-[#e2e8f0] rounded-[8px] overflow-hidden">
+                                      <table className="w-full text-sm">
+                                        <thead>
+                                          <tr className="bg-[#fafafa] border-b border-[#e2e8f0]">
+                                            <th className="text-xs font-medium text-[#737373] text-left py-2.5 pl-4 pr-3">Date & Time</th>
+                                            <th className="text-xs font-medium text-[#737373] text-left py-2.5 pr-3">Type</th>
+                                            <th className="text-xs font-medium text-[#737373] text-left py-2.5 pr-3">Amount</th>
+                                            <th className="text-xs font-medium text-[#737373] text-left py-2.5 pr-3">Volunteer</th>
+                                            <th className="text-xs font-medium text-[#737373] text-left py-2.5 pr-3">Recipient</th>
+                                            <th className="text-xs font-medium text-[#737373] text-left py-2.5 pr-4">Notes</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {cardTxns.map((t, i) => (
+                                            <tr key={t.id} className={i < cardTxns.length - 1 ? "border-b border-[#e2e8f0]" : ""}>
+                                              <td className="py-2.5 pl-4 pr-3 text-[#525252] whitespace-nowrap">{fmt(t.date)}</td>
+                                              <td className="py-2.5 pr-3">
+                                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${t.type === "spend" ? "bg-[#fed7aa] text-[#9a3412]" : "bg-[#bbf7d0] text-[#166534]"}`}>
+                                                  {t.type === "spend" ? "Spend" : "Donation"}
+                                                </span>
+                                              </td>
+                                              <td className="py-2.5 pr-3 font-medium text-[#0a0a0a]">-${t.amount.toFixed(2)}</td>
+                                              <td className="py-2.5 pr-3 text-[#525252]">{t.volunteer}</td>
+                                              <td className="py-2.5 pr-3 text-[#525252]">{t.recipient ?? "—"}</td>
+                                              <td className="py-2.5 pr-4 text-[#a3a3a3]">{t.notes || "—"}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+                                </div>
+
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+
+                      </React.Fragment>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+
+              {/* Footer */}
+              <div className="px-6 py-3 border-t border-[#e2e8f0]">
+                <p className="text-xs text-[#737373]">
+                  Showing {filteredCards.length} of {data.cards.length} cards
+                </p>
+              </div>
+
+            </div>
+          </div>
         </div>
       </SidebarInset>
     </SidebarProvider>

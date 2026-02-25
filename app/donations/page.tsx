@@ -63,14 +63,12 @@ export default function DonationsPage() {
     a.click(); URL.revokeObjectURL(url)
   }
 
-  const pillInput = "rounded-[26px] bg-white/20 border-white/30 text-white placeholder:text-white/50 h-9 text-sm"
-
   return (
     <SidebarProvider>
       <AppSidebar variant="inset" />
       <SidebarInset>
 
-        {/* ── Figma-style header ── */}
+        {/* ── Header ── */}
         <div className="border-b h-12 flex items-center shrink-0">
           <div className="flex items-center gap-4 pl-5">
             <SidebarTrigger className="bg-white border border-[#e2e8f0] rounded-[6px] p-2 size-8 flex items-center justify-center" />
@@ -122,17 +120,17 @@ export default function DonationsPage() {
             </div>
 
             {/* ── Donation Log card ── */}
-            <div className="bg-[#ef4444] rounded-[12px] overflow-hidden">
+            <div className="bg-white border border-[#e2e8f0] rounded-[12px] overflow-hidden">
 
               {/* Card header */}
-              <div className="flex items-center justify-between px-6 py-4">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-[#e2e8f0]">
                 <div>
-                  <p className="text-sm font-semibold text-white">Donation Log</p>
-                  <p className="text-xs text-white/70 mt-0.5">Filter and export donation records</p>
+                  <p className="text-sm font-semibold text-[#0a0a0a]">Donation Log</p>
+                  <p className="text-xs text-[#737373] mt-0.5">Filter and export donation records</p>
                 </div>
                 <button
                   onClick={exportToCSV}
-                  className="bg-[#2563eb] text-white text-sm font-medium px-4 py-2 rounded-[6px] flex items-center gap-2 hover:bg-[#1d4ed8] transition-colors"
+                  className="bg-[#0a0a0a] text-white text-sm font-medium px-4 py-2 rounded-[6px] flex items-center gap-2 hover:bg-[#262626] transition-colors"
                 >
                   <HugeiconsIcon icon={DownloadIcon} strokeWidth={2} className="size-4" />
                   Export CSV
@@ -140,29 +138,29 @@ export default function DonationsPage() {
               </div>
 
               {/* Filters row */}
-              <div className="px-6 pb-5 grid grid-cols-4 gap-3">
+              <div className="px-6 py-4 grid grid-cols-4 gap-3 border-b border-[#e2e8f0]">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-white/80">Start Date</Label>
+                  <Label className="text-xs font-medium text-[#737373]">Start Date</Label>
                   <Input
                     type="date"
                     value={filters.startDate}
                     onChange={e => setFilters({ ...filters, startDate: e.target.value })}
-                    className={`${pillInput} [color-scheme:dark]`}
+                    className="h-8 text-sm rounded-[6px]"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-white/80">End Date</Label>
+                  <Label className="text-xs font-medium text-[#737373]">End Date</Label>
                   <Input
                     type="date"
                     value={filters.endDate}
                     onChange={e => setFilters({ ...filters, endDate: e.target.value })}
-                    className={`${pillInput} [color-scheme:dark]`}
+                    className="h-8 text-sm rounded-[6px]"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-white/80">Store</Label>
+                  <Label className="text-xs font-medium text-[#737373]">Store</Label>
                   <Select value={filters.store} onValueChange={v => setFilters({ ...filters, store: v })}>
-                    <SelectTrigger className="rounded-[26px] bg-white/20 border-white/30 text-white h-9 text-sm">
+                    <SelectTrigger size="sm" className="rounded-[6px]">
                       <SelectValue placeholder="All Stores" />
                     </SelectTrigger>
                     <SelectContent>
@@ -172,12 +170,12 @@ export default function DonationsPage() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-white/80">Recipient</Label>
+                  <Label className="text-xs font-medium text-[#737373]">Recipient</Label>
                   <Input
                     placeholder="Search recipient..."
                     value={filters.recipient}
                     onChange={e => setFilters({ ...filters, recipient: e.target.value })}
-                    className={pillInput}
+                    className="h-8 text-sm rounded-[6px]"
                   />
                 </div>
               </div>
@@ -185,36 +183,36 @@ export default function DonationsPage() {
               {/* Table */}
               <Table>
                 <TableHeader>
-                  <TableRow className="border-white/20 hover:bg-transparent">
-                    <TableHead className="text-xs font-medium text-white/70 py-3 pl-6">Date</TableHead>
-                    <TableHead className="text-xs font-medium text-white/70 py-3">Store</TableHead>
-                    <TableHead className="text-xs font-medium text-white/70 py-3">Amount</TableHead>
-                    <TableHead className="text-xs font-medium text-white/70 py-3">Volunteer</TableHead>
-                    <TableHead className="text-xs font-medium text-white/70 py-3">Recipient</TableHead>
-                    <TableHead className="text-xs font-medium text-white/70 py-3">Notes</TableHead>
+                  <TableRow className="bg-[#fafafa] hover:bg-[#fafafa]">
+                    <TableHead className="text-xs font-medium text-[#737373] py-3 pl-6">Date</TableHead>
+                    <TableHead className="text-xs font-medium text-[#737373] py-3">Store</TableHead>
+                    <TableHead className="text-xs font-medium text-[#737373] py-3">Amount</TableHead>
+                    <TableHead className="text-xs font-medium text-[#737373] py-3">Volunteer</TableHead>
+                    <TableHead className="text-xs font-medium text-[#737373] py-3">Recipient</TableHead>
+                    <TableHead className="text-xs font-medium text-[#737373] py-3">Notes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredData.length > 0 ? (
                     filteredData.map(d => (
-                      <TableRow key={d.id} className="border-white/20 hover:bg-white/10">
-                        <TableCell className="text-sm text-white py-3 pl-6">
+                      <TableRow key={d.id} className="border-[#e2e8f0] hover:bg-[#fafafa]">
+                        <TableCell className="text-sm text-[#525252] py-3 pl-6">
                           {new Date(d.date).toLocaleDateString()}
                         </TableCell>
-                        <TableCell className="text-sm text-white py-3">{d.store}</TableCell>
+                        <TableCell className="text-sm font-medium text-[#0a0a0a] py-3">{d.store}</TableCell>
                         <TableCell className="py-3">
-                          <span className="bg-white/20 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
+                          <span className="bg-[#bbf7d0] text-[#166534] text-xs font-semibold px-2.5 py-1 rounded-full">
                             ${d.amount}
                           </span>
                         </TableCell>
-                        <TableCell className="text-sm text-white py-3">{d.volunteer}</TableCell>
-                        <TableCell className="text-sm text-white py-3">{d.recipient}</TableCell>
-                        <TableCell className="text-sm text-white/60 py-3">{d.notes}</TableCell>
+                        <TableCell className="text-sm text-[#525252] py-3">{d.volunteer}</TableCell>
+                        <TableCell className="text-sm text-[#525252] py-3">{d.recipient}</TableCell>
+                        <TableCell className="text-sm text-[#a3a3a3] py-3">{d.notes}</TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-24 text-center text-white/70 text-sm">
+                      <TableCell colSpan={6} className="h-24 text-center text-[#737373] text-sm">
                         No donations found matching your filters.
                       </TableCell>
                     </TableRow>
@@ -223,8 +221,8 @@ export default function DonationsPage() {
               </Table>
 
               {/* Footer count */}
-              <div className="px-6 py-3 border-t border-white/20">
-                <p className="text-xs text-white/60">
+              <div className="px-6 py-3 border-t border-[#e2e8f0]">
+                <p className="text-xs text-[#737373]">
                   Showing {filteredData.length} of {donationsData.length} donations
                 </p>
               </div>

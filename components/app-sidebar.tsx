@@ -19,7 +19,6 @@ import {
   CommandIcon,
   DashboardSquare01Icon,
   Archive01Icon,
-  ShoppingBasket01Icon,
   GiveBloodIcon,
   Settings05Icon,
   HelpCircleIcon,
@@ -34,19 +33,14 @@ const data = {
       icon: <HugeiconsIcon icon={DashboardSquare01Icon} strokeWidth={2} />,
     },
     {
-      title: "Inventory",
-      url: "/inventory",
-      icon: <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} />,
-    },
-    {
       title: "Add Gift Card",
       url: "/add-card",
       icon: <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />,
     },
     {
-      title: "Spending",
+      title: "Inventory",
       url: "/redemption",
-      icon: <HugeiconsIcon icon={ShoppingBasket01Icon} strokeWidth={2} />,
+      icon: <HugeiconsIcon icon={Archive01Icon} strokeWidth={2} />,
     },
     {
       title: "Donations Given",
